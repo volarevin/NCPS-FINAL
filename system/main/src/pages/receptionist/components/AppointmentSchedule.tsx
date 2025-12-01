@@ -643,6 +643,7 @@ export function AppointmentSchedule({ selectedAppointmentFromDashboard, onClearS
         onUpdateDetails={handleUpdateDetails}
         onCancel={() => {
             if (selectedAppointment) {
+                setIsDetailsOpen(false);
                 setStatusDialog({ open: true, type: selectedAppointment.status === 'pending' ? 'reject' : 'cancel', appointmentId: selectedAppointment.id });
             }
         }}
