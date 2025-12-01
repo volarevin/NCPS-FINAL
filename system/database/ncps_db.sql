@@ -25,7 +25,7 @@ DELIMITER $$
 --
 -- Procedures
 --
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_cancel_appointment` (IN `p_appt_id` INT, IN `p_reason` TEXT, IN `p_category` VARCHAR(50))   BEGIN
+CREATE PROCEDURE `sp_cancel_appointment` (IN `p_appt_id` INT, IN `p_reason` TEXT, IN `p_category` VARCHAR(50))   BEGIN
     UPDATE appointments 
     SET status = 'Cancelled', 
         cancellation_reason = p_reason,
@@ -37,7 +37,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_cancel_appointment` (IN `p_appt_
     VALUES ('Cancellation', CONCAT('Appointment #', p_appt_id, ' cancelled by user.'));
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_get_admin_dashboard_stats` ()   BEGIN
+CREATE PROCEDURE `sp_get_admin_dashboard_stats` ()   BEGIN
     SELECT 
         (SELECT COUNT(*) FROM appointments WHERE DATE(appointment_date) = CURRENT_DATE) AS today_appointments,
         (SELECT COUNT(*) FROM appointments WHERE status = 'Pending') AS pending_requests,
@@ -46,7 +46,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_get_admin_dashboard_stats` ()   
         (SELECT COALESCE(SUM(total_cost), 0) FROM appointments WHERE status = 'Completed' AND MONTH(appointment_date) = MONTH(CURRENT_DATE)) AS monthly_revenue;
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_get_customer_stats` (IN `p_customer_id` INT)   BEGIN
+CREATE PROCEDURE `sp_get_customer_stats` (IN `p_customer_id` INT)   BEGIN
     SELECT 
         (SELECT COUNT(*) FROM appointments WHERE customer_id = p_customer_id AND status = 'Pending') AS pending_count,
         (SELECT COUNT(*) FROM appointments WHERE customer_id = p_customer_id AND status = 'Completed') AS completed_count,
