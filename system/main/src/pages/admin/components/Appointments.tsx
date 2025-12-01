@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { useFeedback } from "@/context/FeedbackContext";
 // import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getProfilePictureUrl } from "@/lib/utils";
+import { iconMap } from "./CategorySettingsDialog";
 
 interface Appointment {
   id: string;
@@ -49,6 +50,8 @@ interface Appointment {
   cancelledByRole?: string;
   cancelledById?: string;
   category?: string;
+  categoryIcon?: string;
+  categoryColor?: string;
   createdAt?: Date;
   updatedAt?: Date;
   customerAvatar?: string;
@@ -181,6 +184,8 @@ export function Appointments() {
         cancelledByRole: appt.cancelled_by_role,
         cancelledById: appt.cancelled_by_id,
         category: appt.category_name,
+        categoryIcon: appt.category_icon,
+        categoryColor: appt.category_color,
         createdAt: new Date(appt.created_at),
         updatedAt: new Date(appt.updated_at),
         customerAvatar: getProfilePictureUrl(appt.customer_profile_picture),
@@ -531,8 +536,16 @@ export function Appointments() {
             
             <div className="flex flex-col md:flex-row justify-between gap-6">
               <div className="flex items-start gap-5">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#E6F0F4] to-[#F0F7FA] dark:from-primary/20 dark:to-primary/10 flex items-center justify-center text-[#0B4F6C] dark:text-primary shrink-0 shadow-inner">
-                  <User className="w-7 h-7" />
+                <div 
+                  className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#E6F0F4] to-[#F0F7FA] dark:from-primary/20 dark:to-primary/10 flex items-center justify-center text-[#0B4F6C] dark:text-primary shrink-0 shadow-inner"
+                  style={appointment.categoryColor ? { color: appointment.categoryColor } : {}}
+                >
+                  {(() => {
+                    const Icon = appointment.categoryIcon && iconMap[appointment.categoryIcon] 
+                      ? iconMap[appointment.categoryIcon] 
+                      : User;
+                    return <Icon className="w-7 h-7" />;
+                  })()}
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">

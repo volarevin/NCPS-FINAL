@@ -96,29 +96,32 @@ export function Reports() {
     }
   };
 
-  const handleExport = () => {
-    const headers = ["Month", "Appointments", "Completed", "Cancelled", "Revenue"];
-    const rows = monthlyData.map(m => [
-        m.month,
-        m.appointments,
-        m.completed,
-        m.cancelled,
-        m.revenue
-    ]);
-    
-    const csvContent = [
-        headers.join(","),
-        ...rows.map(r => r.join(","))
-    ].join("\n");
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `report_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    document.body.removeChild(link);
+  const handleExport = async () => {
+    try {
+      const token = sessionStorage.getItem('token');
+      if (!token) return;
+
+      const queryParams = new URLSearchParams();
+      if (dateRange.start) queryParams.append('startDate', dateRange.start);
+      if (dateRange.end) queryParams.append('endDate', dateRange.end);
+
+      const response = await fetch(`http://localhost:5000/api/admin/reports/export?${queryParams}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to export reports');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `detailed_report_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (error) {
+      console.error('Export failed:', error);
+    }
   };
 
   return (

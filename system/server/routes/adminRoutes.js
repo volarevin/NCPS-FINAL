@@ -26,6 +26,7 @@ router.delete('/users/:id/notifications', adminController.clearUserNotifications
 router.delete('/notifications', adminController.clearAllSystemNotifications);
 
 router.get('/reports', adminController.getReportsData);
+router.get('/reports/export', adminController.exportDetailedReports);
 
 router.get('/services', adminController.getAllServices);
 router.post('/services', adminController.createService);

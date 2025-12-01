@@ -2,6 +2,7 @@ import { PageHeader } from "./PageHeader";
 import { useState, useEffect } from "react";
 import { UserCard } from "./UserCard";
 import { UserDetailsDialog } from "./UserDetailsDialog";
+import { AddUserDialog } from "./AddUserDialog";
 import { Search, Users, Shield, UserPlus, UserCheck, Activity, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { getProfilePictureUrl } from "@/lib/utils";
@@ -42,46 +43,47 @@ export function UserAccounts() {
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+
+  const fetchUsers = async () => {
+    try {
+      const token = sessionStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('http://localhost:5000/api/admin/users', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+
+      const formatted = data.map((user: any) => {
+        let role = "customer";
+        const dbRole = user.role.toLowerCase();
+        
+        if (dbRole === "technician") role = "technician";
+        else if (dbRole === "admin") role = "admin";
+        else if (dbRole === "receptionist") role = "staff";
+        else if (dbRole === "customer") role = "customer";
+
+        return {
+          id: user.user_id.toString(),
+          fullName: `${user.first_name} ${user.last_name}`,
+          username: user.username,
+          email: user.email,
+          phone: user.phone_number,
+          role: role,
+          avatar: getProfilePictureUrl(user.profile_picture),
+          joinedDate: new Date(user.created_at).toLocaleDateString(),
+          activityLogs: [], // Fetched on demand
+        };
+      });
+
+      setUsers(formatted);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const token = sessionStorage.getItem('token');
-        if (!token) return;
-
-        const response = await fetch('http://localhost:5000/api/admin/users', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-
-        const formatted = data.map((user: any) => {
-          let role = "customer";
-          const dbRole = user.role.toLowerCase();
-          
-          if (dbRole === "technician") role = "technician";
-          else if (dbRole === "admin") role = "admin";
-          else if (dbRole === "receptionist") role = "staff";
-          else if (dbRole === "customer") role = "customer";
-
-          return {
-            id: user.user_id.toString(),
-            fullName: `${user.first_name} ${user.last_name}`,
-            username: user.username,
-            email: user.email,
-            phone: user.phone_number,
-            role: role,
-            avatar: getProfilePictureUrl(user.profile_picture),
-            joinedDate: new Date(user.created_at).toLocaleDateString(),
-            activityLogs: [], // Fetched on demand
-          };
-        });
-
-        setUsers(formatted);
-      } catch (error) {
-        console.error('Error fetching users:', error);
-      }
-    };
-
     fetchUsers();
   }, []);
 
@@ -169,12 +171,6 @@ export function UserAccounts() {
       icon: Shield,
       color: "bg-purple-500",
     },
-    {
-      label: "Active Now",
-      value: 12,
-      icon: Activity,
-      color: "bg-orange-500",
-    },
   ];
 
   return (
@@ -209,7 +205,9 @@ export function UserAccounts() {
               </AlertDialogContent>
             </AlertDialog>
             
-            <button className="bg-[#0B4F6C] dark:bg-sky-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#093e54] dark:hover:bg-sky-700 transition-colors shadow-sm">
+            <button 
+              onClick={() => setIsAddUserOpen(true)}
+              className="bg-[#0B4F6C] dark:bg-sky-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#093e54] dark:hover:bg-sky-700 transition-colors shadow-sm">
                 <UserPlus className="w-4 h-4" />
                 Add New User
             </button>
@@ -286,6 +284,12 @@ export function UserAccounts() {
         }}
         onPromote={(id: string) => console.log("Promote", id)}
         onDemote={(id: string) => console.log("Demote", id)}
+      />
+      
+      <AddUserDialog 
+        open={isAddUserOpen} 
+        onOpenChange={setIsAddUserOpen} 
+        onUserAdded={fetchUsers} 
       />
     </div>
   );

@@ -680,7 +680,7 @@ export default function ProfilePage() {
                   <div key={log.history_id} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg text-sm">
                     <div>
                       <div className="font-medium text-foreground">{new Date(log.created_at).toLocaleString()}</div>
-                      <div className="text-xs text-muted-foreground">{log.ip_address || 'Unknown IP'} • {log.user_agent ? log.user_agent.substring(0, 30) + '...' : 'Unknown Device'}</div>
+                      <div className="text-xs text-muted-foreground">{log.user_agent ? log.user_agent.substring(0, 30) + '...' : 'Unknown Device'}</div>
                     </div>
                     <Badge variant={log.success ? "outline" : "destructive"} className={log.success ? "text-green-600 border-green-200 bg-green-50 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400" : ""}>
                       {log.success ? "Success" : "Failed"}

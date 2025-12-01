@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const checkTechnicianConflict = require('../utils/conflictChecker');
+const { logAction } = require('../utils/auditHelper');
 
 exports.checkConflict = async (req, res) => {
   const { technicianId, date, time, serviceId, appointmentId } = req.body;
@@ -80,7 +81,7 @@ exports.getAllAppointments = (req, res) => {
            u.first_name as customer_first_name, u.last_name as customer_last_name,
            u.email as customer_email, u.phone_number as customer_phone, u.address as customer_address, u.profile_picture as customer_profile_picture,
            t.first_name as tech_first_name, t.last_name as tech_last_name, t.profile_picture as tech_profile_picture,
-           s.name as service_name, sc.name as category_name,
+           s.name as service_name, sc.name as category_name, sc.icon as category_icon, sc.color as category_color,
            r.rating, r.feedback_text,
            cb.role as cancelled_by_role, cb.user_id as cancelled_by_id
     FROM appointments a
@@ -361,6 +362,92 @@ exports.getReportsData = (req, res) => {
   });
 };
 
+exports.exportDetailedReports = (req, res) => {
+  const { startDate, endDate } = req.query;
+  
+  let serviceJoinCondition = "";
+  let monthlyWhere = "";
+  let queryParams = [];
+
+  if (startDate && endDate) {
+    serviceJoinCondition = "AND a.appointment_date BETWEEN ? AND ?";
+    monthlyWhere = "WHERE a.appointment_date BETWEEN ? AND ?";
+    queryParams = [startDate, endDate];
+  } else if (startDate) {
+    serviceJoinCondition = "AND a.appointment_date >= ?";
+    monthlyWhere = "WHERE a.appointment_date >= ?";
+    queryParams = [startDate];
+  } else if (endDate) {
+    serviceJoinCondition = "AND a.appointment_date <= ?";
+    monthlyWhere = "WHERE a.appointment_date <= ?";
+    queryParams = [endDate];
+  } else {
+    monthlyWhere = "WHERE a.appointment_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)";
+  }
+
+  const queries = {
+    services: `
+      SELECT 
+          s.name,
+          COUNT(a.appointment_id) as requests,
+          COALESCE(SUM(CASE WHEN a.status = 'Completed' THEN COALESCE(a.total_cost, s.estimated_price) ELSE 0 END), 0) as revenue,
+          COALESCE(AVG(r.rating), 0) as rating
+      FROM services s
+      LEFT JOIN appointments a ON s.service_id = a.service_id ${serviceJoinCondition}
+      LEFT JOIN reviews r ON a.appointment_id = r.appointment_id
+      GROUP BY s.service_id
+    `,
+    monthly: `
+      SELECT 
+          DATE_FORMAT(a.appointment_date, '%b %Y') as month,
+          COUNT(*) as appointments,
+          SUM(CASE WHEN a.status = 'Completed' THEN 1 ELSE 0 END) as completed,
+          SUM(CASE WHEN a.status = 'Cancelled' THEN 1 ELSE 0 END) as cancelled,
+          COALESCE(SUM(CASE WHEN a.status = 'Completed' THEN COALESCE(a.total_cost, s.estimated_price) ELSE 0 END), 0) as revenue
+      FROM appointments a
+      JOIN services s ON a.service_id = s.service_id
+      ${monthlyWhere}
+      GROUP BY YEAR(a.appointment_date), MONTH(a.appointment_date)
+      ORDER BY YEAR(a.appointment_date), MONTH(a.appointment_date)
+    `
+  };
+
+  db.query(queries.services, queryParams, (err, serviceResults) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ message: 'Error exporting reports' });
+    }
+
+    db.query(queries.monthly, queryParams, (err, monthlyResults) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ message: 'Error exporting reports' });
+      }
+
+      let csvContent = "SERVICES PERFORMANCE\n";
+      csvContent += "Service Name,Requests,Revenue,Average Rating\n";
+      
+      serviceResults.forEach(row => {
+        const revenue = Number(row.revenue) || 0;
+        const rating = Number(row.rating) || 0;
+        csvContent += `"${row.name}",${row.requests},${revenue.toFixed(2)},${rating.toFixed(1)}\n`;
+      });
+
+      csvContent += "\nMONTHLY REVENUE\n";
+      csvContent += "Month,Total Appointments,Completed,Cancelled,Revenue\n";
+
+      monthlyResults.forEach(row => {
+        const revenue = Number(row.revenue) || 0;
+        csvContent += `"${row.month}",${row.appointments},${row.completed},${row.cancelled},${revenue.toFixed(2)}\n`;
+      });
+
+      res.header('Content-Type', 'text/csv');
+      res.header('Content-Disposition', `attachment; filename="summary_report_${new Date().toISOString().split('T')[0]}.csv"`);
+      res.send(csvContent);
+    });
+  });
+};
+
 exports.getAllServices = (req, res) => {
   const query = `
     SELECT s.service_id, s.name, s.estimated_price as price, s.description, 
@@ -625,11 +712,15 @@ exports.updateAppointmentStatus = (req, res) => {
             return res.status(500).json({ error: err.message });
         }
         
-        // Log activity
-        const action = `Appointment ${status}`;
-        const desc = `Appointment #${id} was ${status.toLowerCase()}${category ? ` Category: ${category}` : ''}${reason ? ` Reason: ${reason}` : ''}`;
-        db.query('INSERT INTO activity_logs (user_id, action_type, description) VALUES (?, ?, ?)', 
-          [userId, action, desc]);
+        // Log audit
+        try {
+            logAction(userId, 'Admin', 'UPDATE', 'appointments', id, { 
+                status, 
+                category, 
+                reason, 
+                note: `Appointment #${id} was ${status.toLowerCase()}` 
+            }, req);
+        } catch (e) { console.warn('Audit log failed', e); }
 
         res.json({ message: 'Appointment updated successfully' });
       });
@@ -768,13 +859,12 @@ exports.createAppointment = (req, res) => {
                 return res.status(500).json({ message: 'Database error creating appointment.' });
             }
             
-            // Log activity
+            // Log audit
             const userId = req.userId || null;
-            const action = 'Create Appointment';
-            const desc = `Created appointment #${result.insertId}`;
             if (userId) {
-                 db.query('INSERT INTO activity_logs (user_id, action_type, description) VALUES (?, ?, ?)', 
-                      [userId, action, desc]);
+                try {
+                    logAction(userId, 'Admin', 'CREATE', 'appointments', result.insertId, { note: `Created appointment #${result.insertId}` }, req);
+                } catch (e) { console.warn('Audit log failed', e); }
             }
     
             res.json({ message: 'Appointment created successfully', id: result.insertId });
@@ -1160,7 +1250,7 @@ exports.exportAuditLogs = (req, res) => {
   let query = `
     SELECT l.log_id, l.created_at, l.action, l.actor_role, 
            COALESCE(u.username, 'System') as username,
-           l.table_name, l.record_id, l.changes, l.ip_address
+           l.table_name, l.record_id, l.changes
     FROM audit_logs l
     LEFT JOIN users u ON l.user_id = u.user_id
     WHERE 1=1
@@ -1185,7 +1275,7 @@ exports.exportAuditLogs = (req, res) => {
       return res.status(500).json({ message: 'Error exporting logs' });
     }
 
-    const headers = ['ID', 'Date', 'Action', 'Role', 'User', 'Target', 'Record ID', 'Details', 'IP'];
+    const headers = ['ID', 'Date', 'Action', 'Role', 'User', 'Target', 'Record ID', 'Details'];
     const rows = results.map(row => [
       row.log_id,
       new Date(row.created_at).toISOString(),
@@ -1194,8 +1284,7 @@ exports.exportAuditLogs = (req, res) => {
       row.username,
       row.table_name,
       row.record_id,
-      JSON.stringify(row.changes).replace(/"/g, '""'),
-      row.ip_address
+      JSON.stringify(row.changes).replace(/"/g, '""')
     ]);
 
     const csvContent = [

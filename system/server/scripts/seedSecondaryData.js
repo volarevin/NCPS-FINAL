@@ -117,21 +117,8 @@ async function seedSecondary() {
         console.log(`Generated ${notifCount} notifications.`);
 
         // 3. Generate Activity Logs
-        console.log('Generating Activity Logs...');
-        const [users] = await connection.execute('SELECT user_id FROM users');
-        
-        // Generate 300 logs
-        for (let i = 0; i < 300; i++) {
-            const user = getRandomElement(users);
-            const action = getRandomElement(logActions);
-            const date = getRandomDate(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000), new Date()); // Last 90 days
-            
-            await connection.execute(
-                'INSERT INTO activity_logs (user_id, action_type, description, created_at) VALUES (?, ?, ?, ?)',
-                [user.user_id, 'User Action', `${action}`, date]
-            );
-        }
-        console.log('Activity logs generated.');
+        // 3. Generate Activity Logs
+        // Removed: activity_logs are deprecated; use audit_logs via app runtime where needed.
 
     } catch (err) {
         console.error('Error seeding secondary data:', err);

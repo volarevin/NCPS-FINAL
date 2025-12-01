@@ -24,7 +24,6 @@ interface AuditLog {
   table_name: string;
   record_id: number;
   changes: any;
-  ip_address: string;
   created_at: string;
 }
 
@@ -141,7 +140,9 @@ export function AuditLogs() {
           <div className="border rounded-md p-3 bg-red-50/50 dark:bg-red-900/10 dark:border-red-900/30">
             <h4 className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2 uppercase tracking-wider">Previous State</h4>
             <div className="space-y-1">
-              {Object.entries(parsed.old).map(([key, value]) => (
+              {Object.entries(parsed.old)
+                .filter(([key]) => key !== 'technician_id')
+                .map(([key, value]) => (
                 <div key={key} className="text-xs grid grid-cols-3 gap-2">
                   <span className="font-medium text-gray-600 dark:text-muted-foreground">{key}:</span>
                   <span className="col-span-2 text-gray-800 dark:text-foreground break-all">{String(value)}</span>
@@ -154,7 +155,9 @@ export function AuditLogs() {
           <div className="border rounded-md p-3 bg-green-50/50 dark:bg-green-900/10 dark:border-green-900/30">
             <h4 className="text-xs font-semibold text-green-600 dark:text-green-400 mb-2 uppercase tracking-wider">New State</h4>
             <div className="space-y-1">
-              {Object.entries(parsed.new).map(([key, value]) => (
+              {Object.entries(parsed.new)
+                .filter(([key]) => key !== 'technician_id')
+                .map(([key, value]) => (
                 <div key={key} className="text-xs grid grid-cols-3 gap-2">
                   <span className="font-medium text-gray-600 dark:text-muted-foreground">{key}:</span>
                   <span className="col-span-2 text-gray-800 dark:text-foreground break-all">{String(value)}</span>
@@ -327,8 +330,7 @@ export function AuditLogs() {
           
           <ScrollArea className="flex-1 pr-4">
             <div className="space-y-6 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
+              <div className="space-y-1">
                   <h4 className="text-sm font-medium text-muted-foreground">Actor</h4>
                   <div className="flex items-center gap-2">
                     <Avatar className="h-6 w-6">
@@ -339,11 +341,6 @@ export function AuditLogs() {
                       {selectedLog?.actor_first_name ? `${selectedLog.actor_first_name} ${selectedLog.actor_last_name}` : selectedLog?.actor_username_real}
                     </span>
                   </div>
-                </div>
-                <div className="space-y-1">
-                  <h4 className="text-sm font-medium text-muted-foreground">IP Address</h4>
-                  <p className="text-sm">{selectedLog?.ip_address || 'Unknown'}</p>
-                </div>
               </div>
 
               <div>
