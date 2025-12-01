@@ -155,6 +155,9 @@ export function CreateAppointmentDialog({ open, onOpenChange, onSuccess }: Creat
 
       if (!response.ok) {
         const errorData = await response.json();
+        if (response.status === 409 && errorData.conflict) {
+            setConflict(errorData.conflict.details);
+        }
         throw new Error(errorData.message || 'Failed to create appointment');
       }
 

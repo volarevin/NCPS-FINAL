@@ -103,9 +103,23 @@ export function ViewAppointmentDialog({ open, onOpenChange, appointment, onEdit,
             </div>
           )}
 
-          {isCancelled && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center mb-4">
-                  <p className="text-red-600 font-medium">This appointment has been cancelled.</p>
+          {(isCancelled || appointment.status === 'rejected') && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <p className="text-red-600 font-medium mb-2">
+                      This appointment has been {appointment.status}.
+                  </p>
+                  {appointment.cancellationCategory && (
+                      <div className="mb-1">
+                          <span className="text-xs text-red-600/70 font-semibold uppercase">Category:</span>
+                          <p className="text-sm text-red-700">{appointment.cancellationCategory}</p>
+                      </div>
+                  )}
+                  {(appointment.cancellationReason || appointment.rejectionReason) && (
+                      <div>
+                          <span className="text-xs text-red-600/70 font-semibold uppercase">Reason:</span>
+                          <p className="text-sm text-red-700">{appointment.cancellationReason || appointment.rejectionReason}</p>
+                      </div>
+                  )}
               </div>
           )}
 

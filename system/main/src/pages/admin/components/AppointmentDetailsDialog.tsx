@@ -469,6 +469,7 @@ export function AppointmentDetailsDialog({
                   <Button 
                     className="w-full bg-green-600 hover:bg-green-700 text-white" 
                     onClick={() => onApprove?.(appointment.id, selectedTechnician || appointment.technicianId || "")}
+                    disabled={!selectedTechnician || selectedTechnician === 'unassigned'}
                   >
                     <Check className="w-4 h-4 mr-2" /> Approve
                   </Button>
@@ -482,7 +483,7 @@ export function AppointmentDetailsDialog({
                 </div>
               )}
 
-              {appointment.status !== 'cancelled' && appointment.status !== 'completed' && appointment.status !== 'rejected' && (
+              {appointment.status !== 'pending' && appointment.status !== 'cancelled' && appointment.status !== 'completed' && appointment.status !== 'rejected' && (
                 <Button 
                   variant="outline" 
                   className="w-full border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/20"

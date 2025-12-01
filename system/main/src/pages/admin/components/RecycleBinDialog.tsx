@@ -6,6 +6,16 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Trash2, RefreshCw, X } from "lucide-react";
 import { useFeedback } from "@/context/FeedbackContext";
@@ -30,6 +40,15 @@ export function RecycleBinDialog({ open, onOpenChange }: RecycleBinDialogProps) 
   const { showPromise } = useFeedback();
   const [deletedItems, setDeletedItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    type: 'single' | 'all';
+    id: number | null;
+  }>({
+    isOpen: false,
+    type: 'single',
+    id: null,
+  });
 
   const fetchDeletedItems = async () => {
     try {
@@ -83,57 +102,72 @@ export function RecycleBinDialog({ open, onOpenChange }: RecycleBinDialogProps) 
     });
   };
 
-  const handlePermanentDelete = async (id: number) => {
-    if (!confirm('Are you sure? This cannot be undone.')) return;
-
-    const promise = async () => {
-      const token = sessionStorage.getItem('token');
-      if (!token) throw new Error("No token found");
-
-      const response = await fetch(`http://localhost:5000/api/admin/appointments/${id}/permanent`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (!response.ok) throw new Error('Failed to delete item');
-      
-      fetchDeletedItems();
-      return "Appointment permanently deleted";
-    };
-
-    showPromise(promise(), {
-      loading: 'Deleting appointment permanently...',
-      success: (data) => data,
-      error: 'Failed to delete item',
+  const handlePermanentDelete = (id: number) => {
+    setConfirmDialog({
+      isOpen: true,
+      type: 'single',
+      id: id,
     });
   };
 
-  const handleEmptyBin = async () => {
-    if (!confirm('Are you sure you want to empty the recycle bin? All items will be permanently lost.')) return;
-
-    const promise = async () => {
-      const token = sessionStorage.getItem('token');
-      if (!token) throw new Error("No token found");
-
-      const response = await fetch('http://localhost:5000/api/admin/appointments/recycle-bin', {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (!response.ok) throw new Error('Failed to empty bin');
-      
-      fetchDeletedItems();
-      return "Recycle bin emptied";
-    };
-
-    showPromise(promise(), {
-      loading: 'Emptying recycle bin...',
-      success: (data) => data,
-      error: 'Failed to empty bin',
+  const handleEmptyBin = () => {
+    setConfirmDialog({
+      isOpen: true,
+      type: 'all',
+      id: null,
     });
+  };
+
+  const executeDelete = async () => {
+    setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+    
+    if (confirmDialog.type === 'single' && confirmDialog.id) {
+      const promise = async () => {
+        const token = sessionStorage.getItem('token');
+        if (!token) throw new Error("No token found");
+
+        const response = await fetch(`http://localhost:5000/api/admin/appointments/${confirmDialog.id}/permanent`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) throw new Error('Failed to delete item');
+        
+        fetchDeletedItems();
+        return "Appointment permanently deleted";
+      };
+
+      showPromise(promise(), {
+        loading: 'Deleting appointment permanently...',
+        success: (data) => data,
+        error: 'Failed to delete item',
+      });
+    } else if (confirmDialog.type === 'all') {
+      const promise = async () => {
+        const token = sessionStorage.getItem('token');
+        if (!token) throw new Error("No token found");
+
+        const response = await fetch('http://localhost:5000/api/admin/appointments/recycle-bin', {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) throw new Error('Failed to empty bin');
+        
+        fetchDeletedItems();
+        return "Recycle bin emptied";
+      };
+
+      showPromise(promise(), {
+        loading: 'Emptying recycle bin...',
+        success: (data) => data,
+        error: 'Failed to empty bin',
+      });
+    }
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[800px] bg-white dark:bg-card dark:text-foreground">
         <DialogHeader>
@@ -161,7 +195,7 @@ export function RecycleBinDialog({ open, onOpenChange }: RecycleBinDialogProps) 
             </div>
           )}
 
-          <div className="border dark:border-border rounded-lg overflow-hidden">
+          <div className="border dark:border-border rounded-lg overflow-hidden max-h-[60vh] overflow-y-auto">
             <table className="w-full text-sm text-left">
               <thead className="bg-gray-50 dark:bg-muted/50 text-gray-700 dark:text-muted-foreground font-medium">
                 <tr>
@@ -231,5 +265,26 @@ export function RecycleBinDialog({ open, onOpenChange }: RecycleBinDialogProps) 
         </div>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={confirmDialog.isOpen} onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, isOpen: open }))}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {confirmDialog.type === 'all' 
+              ? "This action cannot be undone. This will permanently delete all items in the recycle bin."
+              : "This action cannot be undone. This will permanently delete this appointment."
+            }
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={executeDelete} className="bg-red-600 hover:bg-red-700 text-white">
+            {confirmDialog.type === 'all' ? "Empty Bin" : "Delete Permanently"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>
   );
 }

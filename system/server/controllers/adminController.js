@@ -1,5 +1,5 @@
 const db = require('../config/db');
-const checkTechnicianConflict = require('../utils/conflictChecker');
+const { checkTechnicianConflict } = require('../utils/conflictChecker');
 const { logAction } = require('../utils/auditHelper');
 
 exports.checkConflict = async (req, res) => {
@@ -684,6 +684,10 @@ exports.updateAppointmentStatus = (req, res) => {
   const { status, reason, category, technicianId, overrideConflict } = req.body;
   const userId = req.userId || req.body.userId;
 
+  if ((status === 'Cancelled' || status === 'Rejected') && !category) {
+      return res.status(400).json({ message: 'Category is required.' });
+  }
+
   console.log(`Updating appointment ${id} status to ${status}. TechnicianId: ${technicianId}`);
 
   const proceed = () => {
@@ -742,7 +746,8 @@ exports.updateAppointmentStatus = (req, res) => {
               const conflict = await checkTechnicianConflict(technicianId, appointment_date, duration_minutes, id);
               if (conflict) {
                   return res.status(409).json({ 
-                      message: 'Technician has a scheduling conflict.', 
+                      message: `Technician is occupied by appointment #${conflict.conflictAppointmentId}. Please choose another technician or time.`, 
+                      conflictAppointmentId: conflict.conflictAppointmentId,
                       conflict: conflict 
                   });
               }
@@ -790,7 +795,8 @@ exports.updateAppointmentDetails = (req, res) => {
                   const conflict = await checkTechnicianConflict(technicianId, appointmentDate, duration, id);
                   if (conflict) {
                       return res.status(409).json({ 
-                          message: 'Technician has a scheduling conflict.', 
+                          message: `Technician is occupied by appointment #${conflict.conflictAppointmentId}. Please choose another technician or time.`, 
+                          conflictAppointmentId: conflict.conflictAppointmentId,
                           conflict: conflict 
                       });
                   }
@@ -829,16 +835,45 @@ exports.restoreAppointment = (req, res) => {
 
 exports.permanentDeleteAppointment = (req, res) => {
     const { id } = req.params;
-    db.query('DELETE FROM appointments WHERE appointment_id = ?', [id], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Appointment permanently deleted' });
+    
+    // Delete related records first (payments, reviews)
+    db.query('DELETE FROM payments WHERE appointment_id = ?', [id], (err) => {
+        if (err) return res.status(500).json({ error: 'Error deleting payments: ' + err.message });
+        
+        db.query('DELETE FROM reviews WHERE appointment_id = ?', [id], (err) => {
+            if (err) return res.status(500).json({ error: 'Error deleting reviews: ' + err.message });
+            
+            db.query('DELETE FROM appointments WHERE appointment_id = ?', [id], (err, result) => {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ message: 'Appointment permanently deleted' });
+            });
+        });
     });
 };
 
 exports.emptyRecycleBin = (req, res) => {
-    db.query('DELETE FROM appointments WHERE marked_for_deletion = 1', (err, result) => {
+    // Get IDs first to delete related records
+    db.query('SELECT appointment_id FROM appointments WHERE marked_for_deletion = 1', (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Recycle bin emptied successfully' });
+        
+        if (results.length === 0) {
+            return res.json({ message: 'Recycle bin is already empty' });
+        }
+
+        const ids = results.map(r => r.appointment_id);
+
+        db.query('DELETE FROM payments WHERE appointment_id IN (?)', [ids], (err) => {
+            if (err) return res.status(500).json({ error: 'Error deleting payments: ' + err.message });
+            
+            db.query('DELETE FROM reviews WHERE appointment_id IN (?)', [ids], (err) => {
+                if (err) return res.status(500).json({ error: 'Error deleting reviews: ' + err.message });
+                
+                db.query('DELETE FROM appointments WHERE appointment_id IN (?)', [ids], (err, result) => {
+                    if (err) return res.status(500).json({ error: err.message });
+                    res.json({ message: 'Recycle bin emptied successfully' });
+                });
+            });
+        });
     });
 };
 
@@ -882,7 +917,8 @@ exports.createAppointment = (req, res) => {
                 const conflict = await checkTechnicianConflict(technician_id, appointment_date, duration);
                 if (conflict) {
                     return res.status(409).json({ 
-                        message: 'Technician has a scheduling conflict.', 
+                        message: `Technician is occupied by appointment #${conflict.conflictAppointmentId}. Please choose another technician or time.`, 
+                        conflictAppointmentId: conflict.conflictAppointmentId,
                         conflict: conflict 
                     });
                 }

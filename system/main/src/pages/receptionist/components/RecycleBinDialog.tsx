@@ -157,7 +157,7 @@ export function RecycleBinDialog({ open, onOpenChange }: RecycleBinDialogProps) 
             </p>
           </div>
 
-          <div className="border rounded-lg overflow-hidden">
+          <div className="border rounded-lg overflow-hidden max-h-[60vh] overflow-y-auto">
             <table className="w-full text-sm text-left">
               <thead className="bg-gray-50 text-gray-700 font-medium">
                 <tr>

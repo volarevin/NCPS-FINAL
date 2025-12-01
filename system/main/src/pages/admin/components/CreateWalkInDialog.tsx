@@ -439,7 +439,7 @@ export function CreateWalkInDialog({ open, onOpenChange, onSuccess }: CreateWalk
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>Scheduling Conflict</AlertTitle>
                     <AlertDescription>
-                      Technician has another appointment: {conflictWarning.service_name} ({conflictWarning.appointment_date ? new Date(conflictWarning.appointment_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''})
+                      Technician has another appointment: {conflictWarning.details?.serviceName} ({conflictWarning.details?.startTime ? new Date(conflictWarning.details.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''})
                       <div className="flex items-center space-x-2 mt-2">
                         <Checkbox id="ignore-conflict" checked={ignoreConflict} onCheckedChange={(c) => setIgnoreConflict(!!c)} />
                         <label htmlFor="ignore-conflict" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">

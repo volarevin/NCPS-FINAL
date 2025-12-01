@@ -48,7 +48,7 @@ interface Appointment {
 interface AppointmentDetailsModalProps {
   appointment: Appointment;
   onClose: () => void;
-  onUpdateStatus: (appointmentId: string, newStatus: "Pending" | "In Progress" | "Completed" | "Cancelled", reason?: string, category?: string, totalCost?: number, costNotes?: string) => void;
+  onUpdateStatus: (appointmentId: string, newStatus: "Pending" | "In Progress" | "Completed" | "Cancelled", reason?: string, category?: string, totalCost?: number, costNotes?: string, overrideEarlyStart?: boolean) => void;
   isTechnician?: boolean;
 }
 
@@ -59,6 +59,7 @@ export default function AppointmentDetailsModal({
 }: AppointmentDetailsModalProps) {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [showEarlyStartDialog, setShowEarlyStartDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelCategory, setCancelCategory] = useState("");
 
@@ -70,6 +71,41 @@ export default function AppointmentDetailsModal({
     "Customer Request",
     "Other"
   ];
+
+  const handleStartJob = () => {
+    const now = new Date();
+    // Try to parse scheduled time
+    let scheduledTime = new Date();
+    if (appointment.rawDate) {
+        scheduledTime = new Date(appointment.rawDate);
+    } else {
+        // Fallback: try to combine date and time strings
+        // This is risky if formats vary, but we'll try standard formats
+        const dateStr = appointment.date + ' ' + appointment.time;
+        scheduledTime = new Date(dateStr);
+    }
+
+    // If parsing failed (invalid date), just proceed (let backend handle it)
+    if (isNaN(scheduledTime.getTime())) {
+        onUpdateStatus(appointment.id, "In Progress");
+        return;
+    }
+
+    // Check if now is before scheduled time (minus 30 mins buffer)
+    const windowStart = new Date(scheduledTime.getTime() - 30 * 60000);
+    
+    if (now < windowStart) {
+        setShowEarlyStartDialog(true);
+        return;
+    }
+    
+    onUpdateStatus(appointment.id, "In Progress");
+  };
+
+  const confirmEarlyStart = () => {
+      onUpdateStatus(appointment.id, "In Progress", undefined, undefined, undefined, undefined, true);
+      setShowEarlyStartDialog(false);
+  };
 
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -341,7 +377,7 @@ export default function AppointmentDetailsModal({
                 {appointment.status === 'Confirmed' && (
                   <Button 
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-lg"
-                    onClick={() => onUpdateStatus(appointment.id, "In Progress")}
+                    onClick={handleStartJob}
                   >
                     <PlayCircle className="w-5 h-5 mr-2" /> Start Job
                   </Button>
@@ -438,6 +474,24 @@ export default function AppointmentDetailsModal({
         }}
         serviceName={appointment.service}
       />
+
+      {/* Early Start Warning Dialog */}
+      <Dialog open={showEarlyStartDialog} onOpenChange={setShowEarlyStartDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+                <AlertCircle className="w-5 h-5" /> Early Start Warning
+            </DialogTitle>
+            <DialogDescription>
+              This job is scheduled for {appointment.date} at {appointment.time}. Are you sure you want to start it now?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEarlyStartDialog(false)}>Cancel</Button>
+            <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={confirmEarlyStart}>Yes, Start Now</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

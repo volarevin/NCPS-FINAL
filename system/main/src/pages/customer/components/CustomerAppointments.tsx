@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { useFeedback } from "@/context/FeedbackContext";
 import { getProfilePictureUrl } from "@/lib/utils";
 
-type AppointmentStatus = 'all' | 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+type AppointmentStatus = 'all' | 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'rejected';
 type ViewMode = 'list' | 'calendar';
 
 export function CustomerAppointments() {
@@ -64,7 +64,10 @@ export function CustomerAppointments() {
         service: appt.service_name,
         categoryIcon: appt.category_icon,
         categoryColor: appt.category_color,
-        description: appt.customer_notes || 'No description provided',
+        description: appt.service_description || 'No description provided',
+        cancellationCategory: appt.cancellation_category,
+        cancellationReason: appt.cancellation_reason,
+        rejectionReason: appt.rejection_reason,
         date: new Date(appt.appointment_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
         time: new Date(appt.appointment_date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false }),
         rawDate: appt.appointment_date.split('T')[0], // For edit form
@@ -156,6 +159,7 @@ export function CustomerAppointments() {
     { id: 'in_progress', label: 'In Progress' },
     { id: 'completed', label: 'Completed' },
     { id: 'cancelled', label: 'Cancelled' },
+    { id: 'rejected', label: 'Rejected' },
   ];
 
   return (

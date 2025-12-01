@@ -1,5 +1,5 @@
 const db = require('../config/db');
-const checkTechnicianConflict = require('../utils/conflictChecker');
+const { checkTechnicianConflict } = require('../utils/conflictChecker');
 
 exports.checkConflict = async (req, res) => {
   const { technicianId, date, time, serviceId, appointmentId } = req.body;
@@ -305,7 +305,8 @@ exports.createAppointment = (req, res) => {
               const conflict = await checkTechnicianConflict(technicianId, appointmentDate, duration);
               if (conflict) {
                   return res.status(409).json({ 
-                      message: 'Technician has a scheduling conflict.', 
+                      message: `Technician is occupied by appointment #${conflict.conflictAppointmentId}. Please choose another technician or time.`, 
+                      conflictAppointmentId: conflict.conflictAppointmentId,
                       conflict: conflict 
                   });
               }
@@ -323,16 +324,20 @@ exports.updateAppointmentStatus = (req, res) => {
   const { id } = req.params;
   const { status, reason, category, technicianId, overrideConflict } = req.body;
   
+  if ((status.toLowerCase() === 'cancelled' || status.toLowerCase() === 'rejected') && !category) {
+      return res.status(400).json({ message: 'Category is required.' });
+  }
+
   const proceed = () => {
       let query = 'UPDATE appointments SET status = ?';
       const params = [status];
 
-      if (status === 'cancelled') {
+      if (status.toLowerCase() === 'cancelled') {
         query += ', cancellation_reason = ?, cancellation_category = ?, cancelled_by = ?';
         params.push(reason, category, req.userId);
-      } else if (status === 'rejected') {
-        query += ', rejection_reason = ?';
-        params.push(reason);
+      } else if (status.toLowerCase() === 'rejected') {
+        query += ', rejection_reason = ?, cancellation_category = ?, cancelled_by = ?';
+        params.push(reason, category, req.userId);
       } else if (status.toLowerCase() === 'confirmed' && technicianId) {
         query += ', technician_id = ?';
         params.push(technicianId);
@@ -363,7 +368,8 @@ exports.updateAppointmentStatus = (req, res) => {
               const conflict = await checkTechnicianConflict(technicianId, appointment_date, duration_minutes, id);
               if (conflict) {
                   return res.status(409).json({ 
-                      message: 'Technician has a scheduling conflict.', 
+                      message: `Technician is occupied by appointment #${conflict.conflictAppointmentId}. Please choose another technician or time.`, 
+                      conflictAppointmentId: conflict.conflictAppointmentId,
                       conflict: conflict 
                   });
               }
@@ -410,7 +416,8 @@ exports.updateAppointmentDetails = (req, res) => {
                   const conflict = await checkTechnicianConflict(technicianId, appointmentDate, duration, id);
                   if (conflict) {
                       return res.status(409).json({ 
-                          message: 'Technician has a scheduling conflict.', 
+                          message: `Technician is occupied by appointment #${conflict.conflictAppointmentId}. Please choose another technician or time.`, 
+                          conflictAppointmentId: conflict.conflictAppointmentId,
                           conflict: conflict 
                       });
                   }
@@ -474,20 +481,47 @@ exports.restoreAppointment = (req, res) => {
 
 exports.permanentDeleteAppointment = (req, res) => {
   const { id } = req.params;
-  const query = 'DELETE FROM appointments WHERE appointment_id = ? AND marked_for_deletion = 1';
+  const database = req.db || db;
   
-  (req.db || db).query(query, [id], (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ message: 'Appointment permanently deleted' });
+  // Delete related records first
+  database.query('DELETE FROM payments WHERE appointment_id = ?', [id], (err) => {
+      if (err) return res.status(500).json({ error: 'Error deleting payments: ' + err.message });
+      
+      database.query('DELETE FROM reviews WHERE appointment_id = ?', [id], (err) => {
+          if (err) return res.status(500).json({ error: 'Error deleting reviews: ' + err.message });
+          
+          database.query('DELETE FROM appointments WHERE appointment_id = ? AND marked_for_deletion = 1', [id], (err, result) => {
+              if (err) return res.status(500).json({ error: err.message });
+              res.json({ message: 'Appointment permanently deleted' });
+          });
+      });
   });
 };
 
 exports.emptyRecycleBin = (req, res) => {
-  const query = 'DELETE FROM appointments WHERE marked_for_deletion = 1';
+  const database = req.db || db;
   
-  (req.db || db).query(query, (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ message: 'Recycle bin emptied' });
+  database.query('SELECT appointment_id FROM appointments WHERE marked_for_deletion = 1', (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      
+      if (results.length === 0) {
+          return res.json({ message: 'Recycle bin is already empty' });
+      }
+
+      const ids = results.map(r => r.appointment_id);
+
+      database.query('DELETE FROM payments WHERE appointment_id IN (?)', [ids], (err) => {
+          if (err) return res.status(500).json({ error: 'Error deleting payments: ' + err.message });
+          
+          database.query('DELETE FROM reviews WHERE appointment_id IN (?)', [ids], (err) => {
+              if (err) return res.status(500).json({ error: 'Error deleting reviews: ' + err.message });
+              
+              database.query('DELETE FROM appointments WHERE appointment_id IN (?)', [ids], (err, result) => {
+                  if (err) return res.status(500).json({ error: err.message });
+                  res.json({ message: 'Recycle bin emptied' });
+              });
+          });
+      });
   });
 };
 

@@ -194,7 +194,7 @@ export function AppointmentSchedule({ selectedAppointmentFromDashboard, onClearS
     }
   };
 
-  const handleUpdateDetails = async (id: string, date: string, time: string, technicianId: string) => {
+  const handleUpdateDetails = async (id: string, date: string, time: string, technicianId: string, overrideConflict?: boolean) => {
     const token = sessionStorage.getItem('token');
     if (!token) return;
 
@@ -205,10 +205,13 @@ export function AppointmentSchedule({ selectedAppointmentFromDashboard, onClearS
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ date, time, technicianId })
+        body: JSON.stringify({ date, time, technicianId, overrideConflict })
       });
 
-      if (!response.ok) throw new Error("Failed to update details");
+      if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to update details");
+      }
       fetchAppointments();
       return "Appointment details updated successfully";
     };
@@ -216,7 +219,7 @@ export function AppointmentSchedule({ selectedAppointmentFromDashboard, onClearS
     showPromise(promise(), {
       loading: 'Updating appointment details...',
       success: (data) => data,
-      error: 'Failed to update appointment details',
+      error: (err) => err.message || 'Failed to update appointment details',
     });
   };
 
@@ -255,7 +258,10 @@ export function AppointmentSchedule({ selectedAppointmentFromDashboard, onClearS
           body: JSON.stringify(body)
         });
         
-        if (!response.ok) throw new Error("Failed to update status");
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || "Failed to update status");
+        }
         return `Appointment ${status}`;
       }
     };
@@ -267,7 +273,7 @@ export function AppointmentSchedule({ selectedAppointmentFromDashboard, onClearS
         setIsDetailsOpen(false);
         return data;
       },
-      error: 'Failed to update status',
+      error: (err) => err.message || 'Failed to update status',
     });
   };
 

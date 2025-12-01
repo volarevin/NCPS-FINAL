@@ -1,8 +1,9 @@
 const db = require('../config/db');
 const bcrypt = require('bcryptjs');
-const { checkTechnicianConflict } = require('../utils/conflictChecker');
+const { checkTechnicianConflict, checkCustomerDuplicate } = require('../utils/conflictChecker');
+const { logAction } = require('../utils/auditHelper');
 
-exports.createAppointment = (req, res) => {
+exports.createAppointment = async (req, res) => {
   const { serviceId, date, time, notes, address, saveAddress } = req.body;
   const customerId = req.userId; // From auth middleware
 
@@ -10,41 +11,56 @@ exports.createAppointment = (req, res) => {
     return res.status(400).json({ message: 'Please provide service, date, time, and address.' });
   }
 
-  // Combine date and time into a single DATETIME string
-  const appointmentDate = `${date} ${time}:00`;
-
-  // If saveAddress is true, save it to customer_addresses
-  if (saveAddress) {
-    // Check if address already exists to avoid duplicates (simple check)
-    (req.db || db).query('SELECT * FROM customer_addresses WHERE user_id = ? AND address_line = ?', [customerId, address], (err, results) => {
-        if (!err && results.length === 0) {
-            (req.db || db).query('INSERT INTO customer_addresses (user_id, address_line, address_label) VALUES (?, ?, ?)', 
-                [customerId, address, 'Saved Address']);
-        }
-    });
-  }
-
-  const query = `
-    INSERT INTO appointments (customer_id, service_id, appointment_date, customer_notes, service_address, status)
-    VALUES (?, ?, ?, ?, ?, 'Pending')
-  `;
-
-  (req.db || db).query(query, [customerId, serviceId, appointmentDate, notes, address], (err, result) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ message: 'Database error creating appointment.' });
+  try {
+    // Check for duplicate booking
+    const duplicate = await checkCustomerDuplicate(customerId, serviceId, date);
+    if (duplicate) {
+      return res.status(409).json(duplicate);
     }
-    res.status(201).json({ message: 'Appointment booked successfully.', appointmentId: result.insertId });
-  });
+
+    // Combine date and time into a single DATETIME string
+    const appointmentDate = `${date} ${time}:00`;
+
+    // If saveAddress is true, save it to customer_addresses
+    if (saveAddress) {
+      // Check if address already exists to avoid duplicates (simple check)
+      (req.db || db).query('SELECT * FROM customer_addresses WHERE user_id = ? AND address_line = ?', [customerId, address], (err, results) => {
+          if (!err && results.length === 0) {
+              (req.db || db).query('INSERT INTO customer_addresses (user_id, address_line, address_label) VALUES (?, ?, ?)', 
+                  [customerId, address, 'Saved Address']);
+          }
+      });
+    }
+
+    const query = `
+      INSERT INTO appointments (customer_id, service_id, appointment_date, customer_notes, service_address, status)
+      VALUES (?, ?, ?, ?, ?, 'Pending')
+    `;
+
+    (req.db || db).query(query, [customerId, serviceId, appointmentDate, notes, address], (err, result) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ message: 'Database error creating appointment.' });
+      }
+      res.status(201).json({ message: 'Appointment booked successfully.', appointmentId: result.insertId });
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error creating appointment.' });
+  }
 };
 
 exports.updateAppointmentStatus = (req, res) => {
   const { id } = req.params;
-  const { status, reason, category, technicianId, overrideConflict, totalCost, costNotes } = req.body;
+  const { status, reason, category, technicianId, overrideConflict, totalCost, costNotes, overrideEarlyStart } = req.body;
   const validStatuses = ['Pending', 'Confirmed', 'In Progress', 'Completed', 'Cancelled', 'Rejected'];
 
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ message: 'Invalid status.' });
+  }
+
+  if ((status === 'Cancelled' || status === 'Rejected') && !category) {
+      return res.status(400).json({ message: 'Cancellation/Rejection category is required.' });
   }
 
   const proceedWithUpdate = () => {
@@ -148,6 +164,37 @@ exports.updateAppointmentStatus = (req, res) => {
     });
   };
 
+  const runEarlyStartCheck = () => {
+    if (status === 'In Progress') {
+      const checkDateQuery = 'SELECT appointment_date FROM appointments WHERE appointment_id = ?';
+      (req.db || db).query(checkDateQuery, [id], (err, results) => {
+          if (err) return res.status(500).json({ message: 'Database error.' });
+          if (results.length === 0) return res.status(404).json({ message: 'Appointment not found.' });
+
+          const apptDate = new Date(results[0].appointment_date);
+          const now = new Date();
+          // Allow start if within 30 mins before
+          const windowStart = new Date(apptDate.getTime() - 30 * 60000); 
+          
+          if (now < windowStart && !overrideEarlyStart) {
+               return res.status(409).json({ 
+                   message: `This job is scheduled for ${apptDate.toLocaleString()}. Are you sure you want to start it now?`,
+                   earlyStart: true,
+                   appointmentDate: apptDate
+               });
+          }
+
+          if (now < windowStart && overrideEarlyStart) {
+              logAction(req.userId, 'Early Start Override', 'appointments', `Started appointment #${id} early. Scheduled: ${apptDate}, Started: ${now}`);
+          }
+          
+          proceedWithUpdate();
+      });
+    } else {
+      proceedWithUpdate();
+    }
+  };
+
   if (technicianId && !overrideConflict) {
     const detailsQuery = `
       SELECT a.appointment_date, s.duration_minutes 
@@ -164,18 +211,19 @@ exports.updateAppointmentStatus = (req, res) => {
         const conflict = await checkTechnicianConflict(technicianId, appointment_date, duration_minutes, id);
         if (conflict) {
           return res.status(409).json({
-            message: 'Technician has a scheduling conflict.',
+            message: `Technician is occupied by appointment #${conflict.conflictAppointmentId}. Please choose another technician or time.`,
+            conflictAppointmentId: conflict.conflictAppointmentId,
             conflict: conflict
           });
         }
-        proceedWithUpdate();
+        runEarlyStartCheck();
       } catch (error) {
         console.error(error);
         return res.status(500).json({ message: 'Error checking conflicts.' });
       }
     });
   } else {
-    proceedWithUpdate();
+    runEarlyStartCheck();
   }
 };
 
@@ -345,7 +393,8 @@ exports.createWalkInAppointment = async (req, res) => {
               const conflict = await checkTechnicianConflict(technicianId, appointmentDate, duration);
               if (conflict) {
                   return res.status(409).json({
-                      message: 'Technician has a scheduling conflict.',
+                      message: `Technician is occupied by appointment #${conflict.conflictAppointmentId}. Please choose another technician or time.`,
+                      conflictAppointmentId: conflict.conflictAppointmentId,
                       conflict: conflict
                   });
               }

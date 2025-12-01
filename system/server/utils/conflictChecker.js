@@ -15,8 +15,11 @@ const checkTechnicianConflict = (technicianId, appointmentDate, durationMinutes,
     const newStart = new Date(appointmentDate);
     const newEnd = new Date(newStart.getTime() + durationMinutes * 60000);
     
-    // Format for MySQL
-    const format = (d) => d.toISOString().slice(0, 19).replace('T', ' ');
+    // Format for MySQL (Local Time)
+    const format = (d) => {
+      const pad = (n) => n.toString().padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    };
     const newStartStr = format(newStart);
     const newEndStr = format(newEnd);
 
@@ -49,6 +52,7 @@ const checkTechnicianConflict = (technicianId, appointmentDate, durationMinutes,
         
         resolve({
           conflict: true,
+          conflictAppointmentId: conflict.appointment_id,
           details: {
             appointmentId: conflict.appointment_id,
             serviceName: conflict.service_name,
@@ -64,4 +68,40 @@ const checkTechnicianConflict = (technicianId, appointmentDate, durationMinutes,
   });
 };
 
-module.exports = checkTechnicianConflict;
+/**
+ * Checks if a customer already has a booking for the same service on the same day.
+ * @param {number} customerId
+ * @param {number} serviceId
+ * @param {string} date - YYYY-MM-DD
+ * @returns {Promise<Object>} - Returns conflict object or null
+ */
+const checkCustomerDuplicate = (customerId, serviceId, date) => {
+  return new Promise((resolve, reject) => {
+    const query = `
+      SELECT a.appointment_id, s.name as service_name, a.appointment_date
+      FROM appointments a
+      JOIN services s ON a.service_id = s.service_id
+      WHERE a.customer_id = ? 
+        AND a.service_id = ?
+        AND DATE(a.appointment_date) = ?
+        AND a.status NOT IN ('Cancelled', 'Rejected')
+    `;
+    
+    db.query(query, [customerId, serviceId, date], (err, results) => {
+      if (err) return reject(err);
+      
+      if (results.length > 0) {
+        const conflict = results[0];
+        resolve({
+          conflict: true,
+          message: `You already have a booking for ${conflict.service_name} on ${date} (appointment #${conflict.appointment_id}).`,
+          conflictingAppointmentId: conflict.appointment_id
+        });
+      } else {
+        resolve(null);
+      }
+    });
+  });
+};
+
+module.exports = { checkTechnicianConflict, checkCustomerDuplicate };
