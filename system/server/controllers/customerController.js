@@ -70,10 +70,11 @@ exports.getDashboardStats = (req, res) => {
 exports.getAppointments = (req, res) => {
   const userId = req.userId;
   const query = `
-    SELECT a.*, s.name as service_name, u.first_name as tech_first_name, u.last_name as tech_last_name, u.phone_number as tech_phone, u.email as tech_email, u.profile_picture as tech_profile_picture,
+    SELECT a.*, s.name as service_name, sc.icon as category_icon, sc.color as category_color, u.first_name as tech_first_name, u.last_name as tech_last_name, u.phone_number as tech_phone, u.email as tech_email, u.profile_picture as tech_profile_picture,
            r.rating, r.feedback_text
     FROM appointments a
     JOIN services s ON a.service_id = s.service_id
+    LEFT JOIN service_categories sc ON s.category_id = sc.category_id
     LEFT JOIN users u ON a.technician_id = u.user_id
     LEFT JOIN reviews r ON a.appointment_id = r.appointment_id
     WHERE a.customer_id = ?

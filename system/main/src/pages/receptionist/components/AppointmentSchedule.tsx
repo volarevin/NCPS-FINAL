@@ -13,6 +13,7 @@ import { CreateWalkInDialog } from "../../admin/components/CreateWalkInDialog";
 import { ReceptionistCalendar } from "./ReceptionistCalendar";
 import { LayoutList, Calendar as CalendarIcon, Star } from "lucide-react";
 import { getProfilePictureUrl } from "@/lib/utils";
+import { iconMap } from "../../admin/components/CategorySettingsDialog";
 
 export interface Appointment {
   id: string;
@@ -35,6 +36,8 @@ export interface Appointment {
   cancelledByRole?: string;
   cancelledById?: string;
   category?: string;
+  categoryIcon?: string;
+  categoryColor?: string;
   createdAt?: Date;
   updatedAt?: Date;
   customerAvatar?: string;
@@ -487,8 +490,12 @@ export function AppointmentSchedule({ selectedAppointmentFromDashboard, onClearS
             
             <div className="flex flex-col md:flex-row justify-between gap-6">
               <div className="flex items-start gap-5">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#E6F0F4] to-[#F0F7FA] dark:from-blue-900/20 dark:to-card flex items-center justify-center text-[#0B4F6C] dark:text-primary shrink-0 shadow-inner dark:shadow-none">
-                  <User className="w-7 h-7" />
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-inner dark:shadow-none transition-transform group-hover:scale-105"
+                     style={{ backgroundColor: appointment.categoryColor ? `${appointment.categoryColor}20` : '#E6F0F4' }}>
+                  {(() => {
+                    const IconComponent = iconMap[appointment.categoryIcon || "Box"] || iconMap["Box"];
+                    return <IconComponent className="w-7 h-7" style={{ color: appointment.categoryColor || "#0B4F6C" }} />;
+                  })()}
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">

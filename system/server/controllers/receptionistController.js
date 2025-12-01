@@ -173,7 +173,7 @@ exports.getAllAppointments = (req, res) => {
       a.created_at, a.updated_at,
       a.walkin_name, a.walkin_phone, a.walkin_email,
       u.first_name as client_first, u.last_name as client_last, u.phone_number, u.email, u.address,
-      s.name as service_name, sc.name as category_name,
+      s.name as service_name, sc.name as category_name, sc.icon as category_icon, sc.color as category_color,
       t.first_name as tech_first, t.last_name as tech_last,
       r.rating, r.feedback_text as feedback
     FROM appointments a
@@ -197,6 +197,8 @@ exports.getAllAppointments = (req, res) => {
       address: row.service_address || row.address || 'No address provided',
       service: row.service_name,
       category: row.category_name,
+      categoryIcon: row.category_icon,
+      categoryColor: row.category_color,
       date: new Date(row.appointment_date).toLocaleDateString('en-US', { 
         year: 'numeric', month: 'long', day: 'numeric' 
       }),

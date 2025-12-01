@@ -1,11 +1,14 @@
 import { Calendar, Clock, User, Eye, X, Star, Edit } from 'lucide-react';
 import { Button } from "../../../components/ui/button";
 import { Badge } from "../../../components/ui/badge";
+import { iconMap } from "../../admin/components/CategorySettingsDialog";
 
 interface AppointmentListCardProps {
   appointment: {
     id: string;
     service: string;
+    categoryIcon?: string;
+    categoryColor?: string;
     description: string;
     date: string;
     time: string;
@@ -75,8 +78,16 @@ export function AppointmentListCard({ appointment, onView, onCancel, onRate, onE
     <div className={`bg-card rounded-xl shadow-sm border border-border hover:shadow-md transition-all duration-200 overflow-hidden group`}>
       <div className="p-5">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
+          <div className="flex gap-4 flex-1">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+                 style={{ backgroundColor: appointment.categoryColor ? `${appointment.categoryColor}20` : '#E6F0F4' }}>
+              {(() => {
+                const IconComponent = iconMap[appointment.categoryIcon || "Box"] || iconMap["Box"];
+                return <IconComponent className="w-6 h-6" style={{ color: appointment.categoryColor || "#0B4F6C" }} />;
+              })()}
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
               <Badge className={`${colors.badge} border-0 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide`}>
                 {statusLabels[appointment.status]}
               </Badge>
@@ -88,6 +99,7 @@ export function AppointmentListCard({ appointment, onView, onCancel, onRate, onE
             <p className="text-sm text-muted-foreground line-clamp-2">
               {appointment.description}
             </p>
+          </div>
           </div>
           
           <div className="flex flex-col sm:flex-row gap-3 text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg border border-border">

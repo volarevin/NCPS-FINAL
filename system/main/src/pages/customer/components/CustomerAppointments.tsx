@@ -62,6 +62,8 @@ export function CustomerAppointments() {
         id: appt.appointment_id.toString(),
         serviceId: appt.service_id,
         service: appt.service_name,
+        categoryIcon: appt.category_icon,
+        categoryColor: appt.category_color,
         description: appt.customer_notes || 'No description provided',
         date: new Date(appt.appointment_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
         time: new Date(appt.appointment_date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false }),
