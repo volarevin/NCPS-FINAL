@@ -74,12 +74,6 @@ After importing the database, you can login with:
 
 ## Troubleshooting
 
-### Port Already in Use
-If you see "Port already in use" errors:
-1. Run `STOP_APP.bat`
-2. Wait a few seconds
-3. Run `START_APP.bat` again
-
 ### Database Connection Error
 1. Make sure MySQL is running
 2. Check credentials in `system/server/.env`
