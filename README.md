@@ -1,21 +1,5 @@
 # NCPS - Network Computer Professional Services
 
-## Quick Start
-
-### 🚀 One-Click Launch
-
-Simply double-click **`START_APP.bat`** to start the entire application.
-
-This will automatically:
-- Start the backend server (Port 5000)
-- Start the frontend development server (Port 5173)
-
-### 🛑 One-Click Stop
-
-Double-click **`STOP_APP.bat`** to stop all running services.
-
----
-
 ## Manual Setup (First Time Only)
 
 If this is your first time running the application, install dependencies first:
